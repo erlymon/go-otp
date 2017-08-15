@@ -29,6 +29,9 @@ type NameServer struct {
 	Col []string
 }
 
+func (server *NameServer) Init() {
+}
+
 func (server *NameServer) Handle(request Request) Responce {
 	switch request.Name {
 	case "SetName":
@@ -39,6 +42,12 @@ func (server *NameServer) Handle(request Request) Responce {
 	default:
 		return Responce{}
 	}
+}
+
+func (server *NameServer) HandleTimer(t time.Time) {
+}
+
+func (server *NameServer) Terminate() {
 }
 
 func NewNameServer() Module {

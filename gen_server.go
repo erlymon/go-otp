@@ -1,5 +1,9 @@
 package otp
 
+import (
+	"time"
+)
+
 /*
 Licensed to the Apache Software Foundation (ASF) under one
 or more contributor license agreements.  See the NOTICE file
@@ -33,43 +37,63 @@ type Responce struct {
 }
 
 type Module interface {
+	Init()
 	Handle(request Request) Responce
+	HandleTimer(t time.Time)
+	Terminate()
 }
 
 type GenServer struct {
 	mod Module
-	q   chan struct{}
-	r   chan Request
+	Q   chan struct{}
+	R   chan Request
+	T   <-chan time.Time
 }
 
 func NewGenServer() *GenServer {
 	return &GenServer{
-		q: make(chan struct{}),
-		r: make(chan Request),
+		Q: make(chan struct{}),
+		R: make(chan Request),
+	}
+}
+
+func NewGenServerWithTimer(c <-chan time.Time) *GenServer {
+	return &GenServer{
+		Q: make(chan struct{}),
+		R: make(chan Request),
+		T: c,
 	}
 }
 
 func (server *GenServer) Start(mod Module) {
-	go server.loop(mod)
+	go func() {
+		mod.Init()
+		defer mod.Terminate()
+		server.loop(mod)
+	}()
 }
 
 func (server *GenServer) Stop() {
-	close(server.q)
+	close(server.Q)
 }
 
 func (server *GenServer) Rpc(name string, data interface{}) chan Responce {
 	responce := make(chan Responce)
-	server.r <- Request{Name: name, Data: data, Resp: responce}
+	server.R <- Request{Name: name, Data: data, Resp: responce}
 	return responce
 }
 
 func (server *GenServer) loop(mod Module) {
+
 	for {
 		select {
-		case request := <-server.r:
+		case request := <-server.R:
 			responce := mod.Handle(request)
 			request.Resp <- responce
-		case <-server.q:
+		case t := <-server.T:
+			mod.HandleTimer(t)
+		case <-server.Q:
+			close(server.R)
 			return
 		}
 	}
